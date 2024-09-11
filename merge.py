@@ -56,6 +56,8 @@ with open('sample.txt', 'r') as file:
                 symbol = line.split(":")[1].strip()
                 if symbol == '[unknown]':
                     symbol = "%s:0x%s"%(file, vaddr_in_file)
+                else:
+                    symbol = "%s:%s"%(file, symbol)
             elif line.strip().startswith("vaddr_in_file:"):
                 vaddr_in_file = line.split(":")[1].strip()
             elif line.strip().startswith("file:"):
@@ -75,6 +77,8 @@ with open('sample.txt', 'r') as file:
             vaddr_in_file_ = lines[line_idx - 2].split(":")[1].strip()
             if symbol_== '[unknown]':
                 symbol_= "%s:0x%s"%(file_, vaddr_in_file_)
+            else:
+                symbol_ = "%s:%s"%(file_, symbol_)
             callchain.append({
                 'symbol': symbol_,
                 'file': file_,
@@ -134,9 +138,6 @@ with open('sample.txt', 'r') as file:
                         and items[idx]['callchain'][i]['vaddr_in_file'] == items[idx-1]['callchain'][i]['vaddr_in_file']:
                         items[idx-1]['callchain'][i]['merge_next'] = True
                         items[idx]['callchain'][i]['merge_prev'] = True
-                        # print("merge %d %s %.6f => %d %s %.6f"%(
-                        # idx-1, items[idx-1]['callchain'][i]['symbol'], items[idx-1]['time'],
-                        # idx, items[idx]['callchain'][i]['symbol'], items[idx]['time']))
                     else: # below path will not merge
                         break
     
@@ -145,8 +146,9 @@ with open('sample.txt', 'r') as file:
         items = tids_to_items[tid]
         for idx in range(len(items)):
             item = items[idx]
-            trace_line = "%16s-%-7s ( 999999) [000] .....    %.6f: tracing_mark_write: C|%s|%s|%d" % (
+            trace_line = "%16s-%-7s (%7s) [000] .....    %.6f: tracing_mark_write: C|%s|%s|%d" % (
                 item['process_name'],
+                item['tid'],
                 item['tid'],
                 item['time'],
                 item['tid'],
@@ -155,8 +157,9 @@ with open('sample.txt', 'r') as file:
             converted_traces.append({"time": item['time'], "trace_line": trace_line})
             for i in range(len(item['callchain'])):
                 if not item['callchain'][i]['merge_prev']:
-                    trace_line = "%16s-%-7s ( 999999) [000] .....    %.6f: tracing_mark_write: B|%s|%s" % (
+                    trace_line = "%16s-%-7s (%7s) [000] .....    %.6f: tracing_mark_write: B|%s|%s" % (
                         item['process_name'],
+                        item['tid'],
                         item['tid'],
                         item['time'],
                         item['tid'],
@@ -172,15 +175,15 @@ with open('sample.txt', 'r') as file:
                         t = items[idx+1]['time']
                     else:
                         t = item['time'] + int(item['event_count'])/5/1000000000
-                    trace_line = "%16s-%-7s ( 999999) [000] .....    %.6f: tracing_mark_write: E|%s|%s" % (
+                    trace_line = "%16s-%-7s (%7s) [000] .....    %.6f: tracing_mark_write: E|%s|%s" % (
                         item['process_name'],
+                        item['tid'],
                         item['tid'],
                         t,
                         item['tid'],
                         item['callchain'][i]['symbol']
                         )
                     converted_traces.append({"time": t, "trace_line": trace_line})
-                    # print(trace_line)
              
     # sort by time
     converted_traces.sort(key=lambda x: x['time'])

@@ -24,7 +24,7 @@ def parse_perf_data(file_path):
             if re.match(r'^$', line):
                 first=True
                 for s in stack:
-                    m = re.match(r'\t +([0-9a-z]+) (.*) \((.*)\)', s)
+                    m = re.match(r'\s*([0-9a-z]+) (.*) \((.*)\)', s)
                     if m:
                         addr=m.group(1)
                         symbol=m.group(2)
