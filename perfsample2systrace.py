@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import re
 import argparse
+import os
 
 def parse_perf_data(lines):
     stack=[]
@@ -50,6 +51,7 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
     if not file:
         print("failed to open perf sample file%s"%perf_sample_file)
         return
+    # print("trace_file %s" % trace_file)
     if trace_file:
         trace_file_fd = open(trace_file, 'r')
         if not trace_file_fd:
@@ -63,7 +65,7 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
 
     if file:
         lines = file.readlines()
-        if lines[0].strip() != "meta_info:":
+        if len(lines) > 0 and lines[0].strip() != "meta_info:":
             lines = parse_perf_data(lines)
         file.close()
         tid=""
@@ -82,7 +84,7 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
         for line_idx in range(len(lines)):
             line = lines[line_idx]
             if line.strip() == "sample:":
-                if tid and (filter_tid == '' or tid == filter_tid):
+                if tid and (len(filter_tid) == 0 or tid == filter_tid):
                     items.append({
                         'type': event_type,
                         'process_name': process_name,
@@ -106,6 +108,8 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                     event_type = line.split(":")[1].strip()
                 elif line.strip().startswith("thread_id:"):
                     tid = line.split(":")[1].strip()
+                    if trace_file_fd:
+                        tid = "%d" % (9000000 + int(tid))
                 elif line.strip().startswith("thread_name:"):
                     process_name = line.split(":")[1].strip()
                 elif line.strip().startswith("time:"):
@@ -113,12 +117,13 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                 elif line.strip().startswith("event_count:"):
                     event_count = int(line.split(":")[1].strip())
                 elif line.strip().startswith("symbol:"):
-                    symbol = line.split(":")[1].strip()
-                    if len(symbol) < 64:
-                        if symbol == '[unknown]':
-                            symbol = ("%s:0x%s"%(file, vaddr_in_file)).replace('[kernel.kallsyms]', 'kernel')
-                        else:
-                            symbol = ("%s:%s"%(file, symbol)).replace('[kernel.kallsyms]', 'kernel')
+                    symbol = re.match(" *symbol:(.*)$", line).group(1).strip()
+                    file_name = os.path.basename(file)
+                    if symbol == '[unknown]':
+                        # get file name from path
+                        symbol = ("%s:0x%s"%(file_name, vaddr_in_file)).replace('[kernel.kallsyms]', 'kernel')
+                    else:
+                        symbol = ("%s:%s"%(file_name, symbol)).replace('[kernel.kallsyms]', 'kernel')
                 elif line.strip().startswith("vaddr_in_file:"):
                     vaddr_in_file = line.split(":")[1].strip()
                 elif line.strip().startswith("file:"):
@@ -133,14 +138,15 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                         'merge_prev': False
                     })
             elif in_callchain and line.strip().startswith("symbol:"):
-                symbol_ = line.split(":")[1].strip()
+                # symbol_ = line.split(":")[1].strip()
+                symbol_ = re.match(" *symbol:(.*)$", line).group(1).strip()
                 file_ = lines[line_idx - 1].split(":")[1].strip()
                 vaddr_in_file_ = lines[line_idx - 2].split(":")[1].strip()
-                if len(symbol) < 64:
-                    if symbol_== '[unknown]':
-                        symbol_= ("%s:0x%s"%(file_, vaddr_in_file_)).replace('[kernel.kallsyms]', 'kernel')
-                    else:
-                        symbol_ = ("%s:%s"%(file_, symbol_)).replace('[kernel.kallsyms]', 'kernel')
+                file_name = os.path.basename(file_)
+                if symbol_== '[unknown]':
+                    symbol_= ("%s:0x%s"%(file_name, vaddr_in_file_)).replace('[kernel.kallsyms]', 'kernel')
+                else:
+                    symbol_ = ("%s:%s"%(file_name, symbol_)).replace('[kernel.kallsyms]', 'kernel')
                 callchain.append({
                     'symbol': symbol_,
                     'file': file_,
@@ -234,6 +240,7 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                  
         # here parse and append trace_event from trace_file
         prev_t = None
+        prev_consumed_idx = 0
         if trace_file_fd:
             trace_lines = trace_file_fd.readlines()
             for trace_line_idx in range(len(trace_lines)):
@@ -241,23 +248,28 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                 # parse 
                 # {threadName}-{tid} ({tid}) [{cpu}] .....    {time}: {trace_content}
                 t = None
-                m = re.match(r'(.*)-([0-9]+) +\(([0-9]+)\) \[(.*)\] .....    ([0-9]+\.[0-9]+): (.*)', trace_line)
+                m = re.match(r'(.*)-([0-9-]+) +\(([ 0-9]+)\) \[([0-9]+)\] ..... *([0-9]+\.[0-9]+): (.*)', trace_line)
                 if m:
-                    t = float(m.group(4))
-                m1 = re.match(r'(.*)-([0-9]+) +\[(.*)\] .....    ([0-9]+\.[0-9]+): (.*)', trace_line)
+                    t = float(m.group(5))
+                m1 = re.match(r'(.*)-([0-9-]+) +\[([0-9]+)\] ..... *([ 0-9]+\.[0-9]+): (.*)', trace_line)
                 if m1:
-                    t = float(m1.group(4))
+                    t = float(m1.group(5))
 
                 if t and prev_t:
-                    # insert converted_traces into converted_traces
-                    for i in range(len(converted_traces)):
-                        if converted_traces[i]['time'] >= prev_t and converted_traces[i]['time'] <= t:
-                            converted_traces[i]['consumed'] = True
-                            if out_file_fd:
-                                out_file_fd.write(converted_traces[i]['trace_line'])
+                    # print("t %.6f prev_t %.6f" % (t, prev_t))
+                    # insert converted_traces into current trace lines by time
+                    for i in range(prev_consumed_idx, len(converted_traces)):
+                        if not converted_traces[i]['consumed']:
+                            if converted_traces[i]['time'] >= prev_t and converted_traces[i]['time'] <= t:
+                                # print("match one %.6f [%.6f, %.6f]" % (converted_traces[i]['time'], prev_t, t))
+                                prev_consumed_idx = i
+                                converted_traces[i]['consumed'] = True
+                                if out_file_fd:
+                                    out_file_fd.write(converted_traces[i]['trace_line'] + "\n")
+                                else:
+                                    print(converted_traces[i]['trace_line'])
                             else:
-                                print(converted_traces[i]['trace_line'])
-                            break
+                                break
                 if t:
                     prev_t = t
 
@@ -265,14 +277,14 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                     out_file_fd.write(trace_line)
                 else:
                     print(trace_line)
-            for i in range(len(converted_traces)):
-                if not converted_traces[i]['consumed']:
-                    converted_traces[i]['consumed'] = True
-                    if out_file_fd:
-                        out_file_fd.write(converted_traces[i]['trace_line'])
-                    else:
-                        print(converted_traces[i]['trace_line'])
-                    break
+            # for i in range(len(converted_traces)):
+            #     if not converted_traces[i]['consumed']:
+            #         converted_traces[i]['consumed'] = True
+            #         if out_file_fd:
+            #             out_file_fd.write("insert: %s" % converted_traces[i]['trace_line'])
+            #         else:
+            #             print(converted_traces[i]['trace_line'])
+            #         break
         else:
             for trace in converted_traces:
                 if out_file_fd:
@@ -297,6 +309,6 @@ or capture by simpleperf:
     simpleperf report-sample --show-callchain -i /data/local/tmp/perf.data -o /data/local/tmp/sample.txt''')
     ap.add_argument("-t", "--trace_file", required=False, help="path to the trace file will merge together, ftrace or systrace text content")
     ap.add_argument("-o", "--out_file", required=False, help="path to the output file")
-    ap.add_argument("-f", "--filter_tid", required=False, help="filter perf sample by tid")
+    ap.add_argument("-f", "--filter_tid", required=False, default='', help="filter perf sample by tid")
     args = vars(ap.parse_args())
     merge(args['perf_sample_file'], args['trace_file'], args['out_file'], args['filter_tid'])
