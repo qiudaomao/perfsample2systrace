@@ -118,12 +118,14 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                     event_count = int(line.split(":")[1].strip())
                 elif line.strip().startswith("symbol:"):
                     symbol = re.match(" *symbol:(.*)$", line).group(1).strip()
-                    file_name = os.path.basename(file)
+                    file_name = file
+                    if file.startswith("/"):
+                        file_name = os.path.basename(file)
                     if symbol == '[unknown]':
                         # get file name from path
                         symbol = ("%s:0x%s"%(file_name, vaddr_in_file)).replace('[kernel.kallsyms]', 'kernel')
                     else:
-                        symbol = ("%s:%s"%(file_name, symbol)).replace('[kernel.kallsyms]', 'kernel')
+                        symbol = ("%s(%s)"%(symbol, file_name)).replace('[kernel.kallsyms]', 'kernel')
                 elif line.strip().startswith("vaddr_in_file:"):
                     vaddr_in_file = line.split(":")[1].strip()
                 elif line.strip().startswith("file:"):
@@ -142,11 +144,13 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                 symbol_ = re.match(" *symbol:(.*)$", line).group(1).strip()
                 file_ = lines[line_idx - 1].split(":")[1].strip()
                 vaddr_in_file_ = lines[line_idx - 2].split(":")[1].strip()
-                file_name = os.path.basename(file_)
+                file_name = file_
+                if file_.startswith("/"):
+                    file_name = os.path.basename(file_)
                 if symbol_== '[unknown]':
                     symbol_= ("%s:0x%s"%(file_name, vaddr_in_file_)).replace('[kernel.kallsyms]', 'kernel')
                 else:
-                    symbol_ = ("%s:%s"%(file_name, symbol_)).replace('[kernel.kallsyms]', 'kernel')
+                    symbol_ = ("%s(%s)"%(symbol_, file_name)).replace('[kernel.kallsyms]', 'kernel')
                 callchain.append({
                     'symbol': symbol_,
                     'file': file_,
