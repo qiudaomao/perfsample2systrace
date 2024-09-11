@@ -22,6 +22,16 @@ def parse_perf_data(lines):
             output_lines.append("  thread_id: %s"%(m.group(2)))
             output_lines.append("  thread_name: %s"%(m.group(1).rstrip()))
             continue
+        m = re.match(r'(.*) +([0-9]+) +([0-9]+\.[0-9]+): +([0-9]+) (.*):', line)
+        if m:
+            output_lines.append("sample:")
+            event_count=int(m.group(4))
+            output_lines.append("  event_type: %s"%(m.group(5)))
+            output_lines.append("  time: %d"%(float(m.group(3))*1000000000))
+            output_lines.append("  event_count: %d"%(event_count))
+            output_lines.append("  thread_id: %s"%(m.group(2)))
+            output_lines.append("  thread_name: %s"%(m.group(1).rstrip()))
+            continue
         if re.match(r'^$', line):
             first=True
             for s in stack:
@@ -123,6 +133,8 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                         file_name = os.path.basename(file)
                     if symbol == '[unknown]':
                         # get file name from path
+                        # if vaddr_in_file.find("ffe377e40378") != -1:
+                            # print("symbol %s file %s filename %s vaddr_in_file %s" % (symbol, file, file_name, vaddr_in_file))
                         symbol = ("%s:0x%s"%(file_name, vaddr_in_file)).replace('[kernel.kallsyms]', 'kernel')
                     else:
                         symbol = ("%s(%s)"%(symbol, file_name)).replace('[kernel.kallsyms]', 'kernel')
