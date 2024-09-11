@@ -3,7 +3,6 @@ import re
 import argparse
 
 def parse_perf_data(lines):
-    print("parse_perf_data")
     stack=[]
     output_lines = []
     output_lines.append("meta_info:")
@@ -33,7 +32,6 @@ def parse_perf_data(lines):
                     if first:
                         first=False
                         output_lines.append("  vaddr_in_file: %s" % addr)
-                        print("  file: %s" % vaddr_file)
                         output_lines.append("  symbol: %s" % symbol)
                         output_lines.append("  callchain:")
                     else:
@@ -116,10 +114,11 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                     event_count = int(line.split(":")[1].strip())
                 elif line.strip().startswith("symbol:"):
                     symbol = line.split(":")[1].strip()
-                    if symbol == '[unknown]':
-                        symbol = ("%s:0x%s"%(file, vaddr_in_file)).replace('[kernel.kallsyms]', 'kernel')
-                    else:
-                        symbol = ("%s:%s"%(file, symbol)).replace('[kernel.kallsyms]', 'kernel')
+                    if len(symbol) < 64:
+                        if symbol == '[unknown]':
+                            symbol = ("%s:0x%s"%(file, vaddr_in_file)).replace('[kernel.kallsyms]', 'kernel')
+                        else:
+                            symbol = ("%s:%s"%(file, symbol)).replace('[kernel.kallsyms]', 'kernel')
                 elif line.strip().startswith("vaddr_in_file:"):
                     vaddr_in_file = line.split(":")[1].strip()
                 elif line.strip().startswith("file:"):
@@ -137,10 +136,11 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                 symbol_ = line.split(":")[1].strip()
                 file_ = lines[line_idx - 1].split(":")[1].strip()
                 vaddr_in_file_ = lines[line_idx - 2].split(":")[1].strip()
-                if symbol_== '[unknown]':
-                    symbol_= ("%s:0x%s"%(file_, vaddr_in_file_)).replace('[kernel.kallsyms]', 'kernel')
-                else:
-                    symbol_ = ("%s:%s"%(file_, symbol_)).replace('[kernel.kallsyms]', 'kernel')
+                if len(symbol) < 64:
+                    if symbol_== '[unknown]':
+                        symbol_= ("%s:0x%s"%(file_, vaddr_in_file_)).replace('[kernel.kallsyms]', 'kernel')
+                    else:
+                        symbol_ = ("%s:%s"%(file_, symbol_)).replace('[kernel.kallsyms]', 'kernel')
                 callchain.append({
                     'symbol': symbol_,
                     'file': file_,
@@ -166,24 +166,6 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
         # reverse the challcain
         for item in items:
             item['callchain'].reverse()
-
-        # Print the first sample
-        # if items:
-        #     first_sample = items[0]
-        #     print("First sample:")
-        #     print(f"  Type: {first_sample['type']}")
-        #     print(f"  Process Name: {first_sample['process_name']}")
-        #     print(f"  Thread ID: {first_sample['tid']}")
-        #     print(f"  Time: {first_sample['time']:.6f}")
-        #     print(f"  Symbol: {first_sample['symbol']}")
-        #     print(f"  Event Count: {first_sample['event_count']}")
-        #     print(f"  Vaddr In File: {first_sample['vaddr_in_file']}")
-        #     print(f"  File: {first_sample['file']}")
-        #     print("  Callchain:")
-        #     for call in first_sample['callchain']:
-        #         print(f"    {call}")
-        # else:
-        #     print("No samples found.")
 
         for item in items:
             if item['tid'] not in tids_to_items:
