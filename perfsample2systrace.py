@@ -131,7 +131,7 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                     file_name = file
                     if file.startswith("/"):
                         file_name = os.path.basename(file)
-                    if symbol == '[unknown]':
+                    if symbol == '[unknown]' or symbol.startswith('!!!'):
                         # get file name from path
                         # if vaddr_in_file.find("ffe377e40378") != -1:
                             # print("symbol %s file %s filename %s vaddr_in_file %s" % (symbol, file, file_name, vaddr_in_file))
@@ -159,7 +159,7 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                 file_name = file_
                 if file_.startswith("/"):
                     file_name = os.path.basename(file_)
-                if symbol_== '[unknown]':
+                if symbol_== '[unknown]' or symbol_.startswith('!!!'):
                     symbol_= ("%s:0x%s"%(file_name, vaddr_in_file_)).replace('[kernel.kallsyms]', 'kernel')
                 else:
                     symbol_ = ("%s(%s)"%(symbol_, file_name)).replace('[kernel.kallsyms]', 'kernel')
