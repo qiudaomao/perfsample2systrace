@@ -118,8 +118,8 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                     event_type = line.split(":")[1].strip()
                 elif line.strip().startswith("thread_id:"):
                     tid = line.split(":")[1].strip()
-                    if trace_file_fd:
-                        tid = "%d" % (9000000 + int(tid))
+                    #if trace_file_fd:
+                    tid = "%d" % (9000000 + int(tid))
                 elif line.strip().startswith("thread_name:"):
                     process_name = line.split(":")[1].strip()
                 elif line.strip().startswith("time:"):
@@ -138,12 +138,6 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                         symbol = ("%s:0x%s"%(file_name, vaddr_in_file)).replace('[kernel.kallsyms]', 'kernel')
                     else:
                         symbol = ("%s(%s)"%(symbol, file_name)).replace('[kernel.kallsyms]', 'kernel')
-                elif line.strip().startswith("vaddr_in_file:"):
-                    vaddr_in_file = line.split(":")[1].strip()
-                elif line.strip().startswith("file:"):
-                    file = line.split(":")[1].strip()
-                elif line.strip() == "callchain:":
-                    in_callchain = True
                     callchain.append({
                         'symbol': symbol,
                         'file': file,
@@ -151,6 +145,12 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                         'merge_next': False,
                         'merge_prev': False
                     })
+                elif line.strip().startswith("vaddr_in_file:"):
+                    vaddr_in_file = line.split(":")[1].strip()
+                elif line.strip().startswith("file:"):
+                    file = line.split(":")[1].strip()
+                elif line.strip() == "callchain:":
+                    in_callchain = True
             elif in_callchain and line.strip().startswith("symbol:"):
                 # symbol_ = line.split(":")[1].strip()
                 symbol_ = re.match(" *symbol:(.*)$", line).group(1).strip()
@@ -240,7 +240,7 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                         if idx < len(items) - 1:
                             t = items[idx+1]['time']
                         else:
-                            t = item['time'] + int(item['event_count'])/5/1000000000
+                            t = item['time']# + int(item['event_count'])/5/1000000000
                         trace_line = "%16s-%-7s (%7s) [000] .....    %.6f: tracing_mark_write: E|%s|%s" % (
                             item['process_name'],
                             item['tid'],
@@ -257,12 +257,25 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
         # here parse and append trace_event from trace_file
         prev_t = None
         prev_consumed_idx = 0
+        trace_begin = False
+        trace_end = False
         if trace_file_fd:
             trace_lines = trace_file_fd.readlines()
             for trace_line_idx in range(len(trace_lines)):
                 trace_line = trace_lines[trace_line_idx]
                 # parse 
                 # {threadName}-{tid} ({tid}) [{cpu}] .....    {time}: {trace_content}
+                if (not trace_begin) and trace_line.startswith('<!-- BEGIN TRACE -->'):
+                    trace_begin = True
+                if trace_begin and (not trace_end) and trace_line.find("</script>") > 0:
+                    trace_end = True
+                    for i in range(prev_consumed_idx, len(converted_traces)):
+                        if not converted_traces[i]['consumed']:
+                            converted_traces[i]['consumed'] = True
+                            if out_file_fd:
+                                out_file_fd.write(converted_traces[i]['trace_line'] + "\n")
+                            else:
+                                print(converted_traces[i]['trace_line'])
                 t = None
                 m = re.match(r'(.*)-([0-9-]+) +\(([ 0-9]+)\) \[([0-9]+)\] ..... *([0-9]+\.[0-9]+): (.*)', trace_line)
                 if m:
@@ -280,30 +293,28 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                                 # print("match one %.6f [%.6f, %.6f]" % (converted_traces[i]['time'], prev_t, t))
                                 prev_consumed_idx = i
                                 converted_traces[i]['consumed'] = True
-                                if out_file_fd:
-                                    out_file_fd.write(converted_traces[i]['trace_line'] + "\n")
-                                else:
-                                    print(converted_traces[i]['trace_line'])
-                            elif converted_traces[i]['time'] <= t:
+                                if not trace_end:
+                                    if out_file_fd:
+                                        out_file_fd.write(converted_traces[i]['trace_line'] + "\n")
+                                    else:
+                                        print(converted_traces[i]['trace_line'])
+                            elif converted_traces[i]['time'] < prev_t:
                                 converted_traces[i]['consumed'] = True
                                 prev_consumed_idx = i
+                                if not trace_end:
+                                    if out_file_fd:
+                                        out_file_fd.write(converted_traces[i]['trace_line'] + "\n")
+                                    else:
+                                        print(converted_traces[i]['trace_line'])
                             else:
                                 break
                 if t:
                     prev_t = t
 
                 if out_file_fd:
-                    out_file_fd.write(trace_line)
+                        out_file_fd.write(trace_line)
                 else:
                     print(trace_line)
-            # for i in range(len(converted_traces)):
-            #     if not converted_traces[i]['consumed']:
-            #         converted_traces[i]['consumed'] = True
-            #         if out_file_fd:
-            #             out_file_fd.write("insert: %s" % converted_traces[i]['trace_line'])
-            #         else:
-            #             print(converted_traces[i]['trace_line'])
-            #         break
         else:
             for trace in converted_traces:
                 if out_file_fd:
