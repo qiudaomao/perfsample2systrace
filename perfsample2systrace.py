@@ -63,7 +63,7 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
         return
     # print("trace_file %s" % trace_file)
     if trace_file:
-        trace_file_fd = open(trace_file, 'r')
+        trace_file_fd = open(trace_file, 'r', errors='ignore')
         if not trace_file_fd:
             print("failed to open trace file %s"%trace_file)
             return
@@ -272,7 +272,7 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                     t = float(m1.group(5))
 
                 if t and prev_t:
-                    # print("t %.6f prev_t %.6f" % (t, prev_t))
+                    # print("find t %.6f prev_t %.6f" % (t, prev_t))
                     # insert converted_traces into current trace lines by time
                     for i in range(prev_consumed_idx, len(converted_traces)):
                         if not converted_traces[i]['consumed']:
@@ -284,6 +284,9 @@ def merge(perf_sample_file='sample.txt', trace_file=None, out_file=None, filter_
                                     out_file_fd.write(converted_traces[i]['trace_line'] + "\n")
                                 else:
                                     print(converted_traces[i]['trace_line'])
+                            elif converted_traces[i]['time'] <= t:
+                                converted_traces[i]['consumed'] = True
+                                prev_consumed_idx = i
                             else:
                                 break
                 if t:
