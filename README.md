@@ -1,37 +1,36 @@
-# Usage guide:
+# merge systrace and perfsample output for visualize
+![](example.png)
+
+---
+
+# Usage Guide
 
 ## Capture on Android
 
 ```shell
 adb shell "atrace --async_start -b 10240 sched freq idle wm am input gfx view"
 adb shell "echo mono > /sys/kernel/tracing/trace_clock"
-```
 
-
-
-### example for geekbench cmdline
-```shell
+# for cmdline app
 adb shell "simpleperf record -e cpu-cycles -f 10000 --call-graph fp -o /data/local/tmp/perf.data -- /data/local/tmp/geekbench_aarch64 --workload 403 --single-core --no-upload"
-```
 
-### for surfaceflinger or any other PID, capture 10 seconds
-
-```shell
+# for surfaceflinger or any other PID already existed, capture 10 seconds
 adb shell "simpleperf record -p $(pidof surfacefinger) -e cpu-cycles -f 10000 --call-graph fp -o /data/local/tmp/perf.data -- sleep 10"
+
+# run your use case
 
 adb shell "atrace --async_stop -z -o /data/local/tmp/trace.atrace"
 adb shell "simpleperf report-sample --show-callchain -i /data/local/tmp/perf.data -o /data/local/tmp/sample.txt"
 adb pull /data/local/tmp/trace.atrace
+# convert from atrace to raw systrace
 systrace.py --from-file=trace.atrace -o trace.html
 adb pull /data/local/tmp/sample.txt
 
-
-systrace.py --from-file=trace.atrace -o trace.html
-
+# merge them to merge.html
 perfsample2systrace.py -p sample.txt -t trace.html -o merge.html
-
-load merge.html to perfetto or systrace
 ```
+
+load merge.html to perfetto https://ui.perfetto.dev or systrace chrome://tracing
 
 ## Capture on Linux
 
@@ -70,7 +69,7 @@ echo 1 > tracing_on
 
 
 /data/perf record -e cpu-cycles -o /data/perf.data -a -g -F 10000 -- sleep 10 (if kuno -F 500 due to weak performance and /proc/sys/kernel/perf_event_max_sample_rate)
-# do you enableing wlan in another cmd window
+# run your use case
 echo 0 > tracing_on
 /data/perf script -i /data/perf.data > /data/perf_data.txt
 cat trace > /data/trace.txt
@@ -87,8 +86,6 @@ python3 perfsample2systrace.py -p perf_data.txt -o output.txt
 ```
 
 
-visualize:
-pull the final html or txt to https://ui.perfetto.dev
-
-![](example.png)
+## Visualize
+load the final html or txt to perfetto https://ui.perfetto.dev or systrace chrome://tracing
 
